@@ -1,0 +1,274 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://trae.local/skills/board-cy/board-contract.schema.json",
+  "title": "board-cy board-contract.json",
+  "description": "板级合同 schema：固化一块具体开发板/硬件模块的硬件事实（身份、SoC、存储、引脚、电源域、BOOT/恢复规则、USB、外设）与安全边界。只允许硬件事实；项目策略（动作语义、协议、分区、休眠策略、工具链版本等）一律不允许出现在本文件。字段缺失或证据不明的值用 null 或显式 'UNKNOWN' 占位，不得猜测。",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "contract_id",
+    "scope",
+    "verified_at",
+    "aliases",
+    "soc",
+    "pins"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "本合同 schema 版本。目前固定为 1。"
+    },
+    "contract_id": {
+      "type": "string",
+      "description": "本实例合同的唯一标识，如 '<board>-<variant>-current'。"
+    },
+    "scope": {
+      "type": "string",
+      "const": "hardware_only_no_application_defaults",
+      "description": "声明本合同只承载硬件事实、不含任何应用默认值。"
+    },
+    "verified_at": {
+      "type": "string",
+      "description": "硬件负责人确认本合同真值的日期（ISO 8601，如 2026-08-05）。"
+    },
+    "authority": {
+      "type": "string",
+      "description": "确认主体与方式（谁、用什么方式确认了合同真值）。"
+    },
+    "aliases": {
+      "type": "object",
+      "description": "板的全部别名：产品名、固件板型别名、PCB 丝印等。这些别名映射到同一套电气设计，不得指向多套设计。",
+      "required": ["product"],
+      "properties": {
+        "product": { "type": "string" },
+        "firmware_board_alias": { "type": "string" },
+        "firmware_board_alias_uppercase": { "type": "string" },
+        "pcb_silkscreen": { "type": "string" }
+      },
+      "additionalProperties": {
+        "type": ["string", "array", "null"],
+        "items": { "type": "string" }
+      }
+    },
+    "soc": {
+      "type": "object",
+      "description": "SoC 身份（板级事实）。",
+      "required": ["model"],
+      "properties": {
+        "model": { "type": "string" },
+        "package": { "type": ["string", "null"] },
+        "revision": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "integer", "null"] }
+    },
+    "psram": {
+      "type": "object",
+      "description": "PSRAM 板级事实；板上没有 PSRAM 时可省略或置 {}。",
+      "properties": {
+        "bytes": { "type": ["integer", "null"] },
+        "interface": { "type": ["string", "null"] },
+        "voltage_v": { "type": ["number", "null"] },
+        "location": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "integer", "number", "null"] }
+    },
+    "flash": {
+      "type": "object",
+      "description": "外部/内部 Flash 板级事实。",
+      "properties": {
+        "family": { "type": ["string", "null"] },
+        "bytes": { "type": ["integer", "null"] },
+        "location": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "integer", "null"] }
+    },
+    "antenna": {
+      "type": ["string", "null"],
+      "description": "天线形态，如 pcb / ufl / chip / none / UNKNOWN。"
+    },
+    "pins": {
+      "type": "object",
+      "description": "关键 GPIO 映射。每个键值为引脚名 → 引脚事实。既支持对象形式 {gpio, active_level, ...}，也支持紧凑数组形式 {\"keys\": [2, 47, ...]}。",
+      "patternProperties": {
+        "^[A-Za-z0-9_]+$": {
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "单个引脚事实。gpio 为必填硬件事实。",
+              "required": ["gpio"],
+              "properties": {
+                "gpio": { "type": "integer" },
+                "active_level": { "type": ["integer", "null"] },
+                "charging_level": { "type": ["integer", "null"] },
+                "full_level": { "type": ["integer", "null"] },
+                "signal": { "type": ["string", "null"] },
+                "purpose": { "type": ["string", "null"] },
+                "silkscreen": { "type": ["string", "null"] },
+                "adc": { "type": ["string", "null"] }
+              },
+              "additionalProperties": { "type": ["string", "integer", "number", "null"] }
+            },
+            {
+              "type": "integer",
+              "description": "紧凑形式：直接给 GPIO 号。"
+            },
+            {
+              "type": "array",
+              "description": "紧凑形式：一组同类别 GPIO 号（如 {\"keys\": [2, 47, ...]}）。",
+              "items": { "type": "integer" }
+            }
+          ]
+        }
+      }
+    },
+    "power": {
+      "type": "object",
+      "description": "共享电源域开关。扫描器依赖 gpio 与 active_level。",
+      "properties": {
+        "gpio": { "type": ["integer", "null"] },
+        "enable_gpio": { "type": ["integer", "null"] },
+        "pin": { "type": ["integer", "null"] },
+        "active_level": { "type": ["integer", "null"] },
+        "enable_active_level": { "type": ["integer", "null"] },
+        "active_high": { "type": ["boolean", "null"] },
+        "power_up_settle_time_ms": { "type": ["integer", "null"] },
+        "power_up_settle_evidence": { "type": ["string", "null"] },
+        "shared_consumers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "command_outputs_low_before_enable": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "data_input_floating_during_transition": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "boolean", "integer", "number", "null", "array"] }
+    },
+    "boot": {
+      "type": "object",
+      "description": "BOOT/下载/恢复规则（本板唯一真值）。扫描器依赖 gpio。",
+      "required": ["gpio", "enter"],
+      "properties": {
+        "gpio": { "type": ["integer", "null"] },
+        "pin": { "type": ["integer", "null"] },
+        "boot_gpio": { "type": ["integer", "null"] },
+        "enter": {
+          "type": "object",
+          "required": ["action"],
+          "properties": {
+            "initial_state": { "type": ["string", "null"] },
+            "action": { "type": "string" },
+            "hold_required": { "type": ["boolean", "null"] },
+            "power_cycle_required": { "type": ["boolean", "null"] }
+          },
+          "additionalProperties": { "type": ["string", "boolean", "null"] }
+        },
+        "exit": {
+          "type": "object",
+          "properties": {
+            "action": { "type": ["string", "null"] },
+            "boot_press_required": { "type": ["boolean", "null"] }
+          },
+          "additionalProperties": { "type": ["string", "boolean", "null"] }
+        },
+        "independent_user_reset_button": { "type": ["boolean", "null"] },
+        "legacy_hold_boot_during_power_on_forbidden": { "type": ["boolean", "null"] },
+        "authority": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "boolean", "integer", "null"] }
+    },
+    "usb": {
+      "type": "object",
+      "description": "USB 控制器与 D+/D- 引脚。扫描器依赖 dn_gpio 与 dp_gpio。",
+      "properties": {
+        "controller": { "type": ["string", "null"] },
+        "dn_gpio": { "type": ["integer", "null"] },
+        "d_minus_gpio": { "type": ["integer", "null"] },
+        "dminus_gpio": { "type": ["integer", "null"] },
+        "dp_gpio": { "type": ["integer", "null"] },
+        "d_plus_gpio": { "type": ["integer", "null"] },
+        "dplus_gpio": { "type": ["integer", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "integer", "null"] }
+    },
+    "encoder": {
+      "type": "object",
+      "description": "旋转编码器引脚（引用 pins 中的引脚名）。",
+      "properties": {
+        "a_pin": { "type": ["string", "null"] },
+        "b_pin": { "type": ["string", "null"] },
+        "press_pin": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "integer", "null"] }
+    },
+    "led": {
+      "type": "object",
+      "description": "LED 板级事实（像素数/颜色序为硬件事实，驱动时序归项目层）。",
+      "properties": {
+        "data_pin": { "type": ["string", "null"] },
+        "pixel_count": { "type": ["integer", "null"] },
+        "color_order": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "integer", "number", "null"] }
+    },
+    "battery": {
+      "type": "object",
+      "description": "电池/供电检测板级事实。",
+      "properties": {
+        "sense_enable_pin": { "type": ["string", "null"] },
+        "sense_adc_pin": { "type": ["string", "null"] },
+        "voltage_divider": { "type": ["number", "null"] },
+        "external_power_pin": { "type": ["string", "null"] },
+        "charge_status_pin": { "type": ["string", "null"] },
+        "charge_status_valid_when_external_power_present": { "type": ["boolean", "null"] },
+        "fuel_gauge_present": { "type": ["boolean", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "boolean", "number", "integer", "null"] }
+    },
+    "audio": {
+      "type": "object",
+      "description": "音频通路引脚（引用 pins 中的引脚名）。",
+      "properties": {
+        "microphone": {
+          "type": "object",
+          "properties": {
+            "bclk_pin": { "type": ["string", "null"] },
+            "ws_pin": { "type": ["string", "null"] },
+            "data_in_pin": { "type": ["string", "null"] }
+          },
+          "additionalProperties": { "type": ["string", "integer", "null"] }
+        },
+        "speaker": {
+          "type": "object",
+          "properties": {
+            "bclk_pin": { "type": ["string", "null"] },
+            "ws_pin": { "type": ["string", "null"] },
+            "data_out_pin": { "type": ["string", "null"] }
+          },
+          "additionalProperties": { "type": ["string", "integer", "null"] }
+        }
+      },
+      "additionalProperties": { "type": ["object", "string", "integer", "null"] }
+    },
+    "debug_uart0": {
+      "type": "object",
+      "description": "调试 UART0 引脚与排针定义（板级事实）。",
+      "properties": {
+        "rx_pin": { "type": ["string", "null"] },
+        "tx_pin": { "type": ["string", "null"] },
+        "header_j4": { "type": ["object", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "integer", "object", "null"] }
+    },
+    "reserved": {
+      "type": "object",
+      "description": "保留/专用资源说明（如 boot 专用脚、flash/psram 总线占用脚）。",
+      "additionalProperties": { "type": ["string", "null"] }
+    }
+  },
+  "additionalProperties": {
+    "description": "允许各板自定义的额外板级事实段（只限硬件事实）。"
+  }
+}
